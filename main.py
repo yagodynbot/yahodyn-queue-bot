@@ -1,99 +1,120 @@
-from urllib.request import Request, urlopen
 
-from html.parser import HTMLParser
+import os
+import json
+import time
+import logging
+from datetime import datetime, timezone
 
-PAGES = {
+import requests
 
-    "Основная очередь": "https://echerha.gov.ua/workload/truck/checkpoints/1/1/30",
+# Yahodin Bot
+# Основна черга завантажених вантажівок понад 7,5 т
 
-    "Товары УКТ ЗЕД 1-24": "https://echerha.gov.ua/workload/truck/checkpoints/2/1/30",
+QUEUE_URL = (
+    "https://echerha.gov.ua/"
+    "workload/truck/checkpoints/1/1/30"
+)
 
-    "Пустые грузовики": "https://echerha.gov.ua/workload/truck/checkpoints/29/1/30",
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-}
+CHECK_INTERVAL = 600
+ALERT_INCREASE = 30
 
-class PageProbe(HTMLParser):
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
-    def __init__(self):
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "YahodinQueueBot/1.0"
+})
 
-        super().__init__()
 
-        self.rows = 0
+def get_queue_data():
+    response = session.get(QUEUE_URL, timeout=30)
+    response.raise_for_status()
 
-        self.title = False
+    return response.text
 
-        self.in_title = False
 
-    def handle_starttag(self, tag, attrs):
+def get_queue_count():
+    """
+    Тут буде підключено перевірений
+    формат даних API єЧерги.
 
-        if tag == "tr":
+    Не використовуємо кількість HTML-рядків
+    як кількість вантажівок.
+    """
+    raise NotImplementedError(
+        "Потрібно підтвердити API та поле "
+        "з кількістю автомобілів."
+    )
 
-            self.rows += 1
 
-        if tag == "title":
+def send_telegram(message):
+    if not BOT_TOKEN or not CHAT_ID:
+        logging.error("BOT_TOKEN або CHAT_ID не задані")
+        return
 
-            self.in_title = True
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{BOT_TOKEN}/sendMessage"
+    )
 
-    def handle_endtag(self, tag):
+    response = requests.post(
+        url,
+        json={
+            "chat_id": CHAT_ID,
+            "text": message
+        },
+        timeout=30
+    )
+    response.raise_for_status()
 
-        if tag == "title":
 
-            self.in_title = False
+def monitor():
+    previous_count = None
 
-    def handle_data(self, data):
+    logging.info("Yahodin Bot started")
 
-        if self.in_title and data.strip():
+    while True:
+        try:
+            current_count = get_queue_count()
 
-            self.title = data.strip()
-
-def check_page(name, url):
-
-    print("\n---", name, "---")
-
-    try:
-
-        request = Request(
-
-            url,
-
-            headers={"User-Agent": "Mozilla/5.0"}
-
-        )
-
-        with urlopen(request, timeout=20) as response:
-
-            html = response.read().decode("utf-8", errors="replace")
-
-            parser = PageProbe()
-
-            parser.feed(html)
-
-            print("HTTP status:", response.status)
-
-            print("Page title:", parser.title)
-
-            print("HTML size:", len(html), "bytes")
-
-            print("Table rows:", parser.rows)
-
-            if parser.rows:
-
-                print("Table data detected")
+            if previous_count is None:
+                previous_count = current_count
+                logging.info(
+                    "Initial queue: %s", current_count
+                )
 
             else:
+                difference = current_count - previous_count
 
-                print("No HTML table detected; JS may load data")
+                logging.info(
+                    "Previous: %s | Current: %s | Change: %+d",
+                    previous_count,
+                    current_count,
+                    difference
+                )
 
-    except Exception as error:
+                if difference >= ALERT_INCREASE:
+                    send_telegram(
+                        "🚛 YAHODIN BOT\n\n"
+                        "Збільшення черги Ягодин — Дорогуск!\n"
+                        f"Було: {previous_count} машин\n"
+                        f"Стало: {current_count} машин\n"
+                        f"Збільшення: +{difference}"
+                    )
 
-        print("Connection error:", str(error))
+                previous_count = current_count
+
+        except Exception:
+            logging.exception("Monitoring error")
+
+        time.sleep(CHECK_INTERVAL)
+
 
 if __name__ == "__main__":
-
-    print("YAHODYN BOT - CONNECTION TEST")
-
-    for name, url in PAGES.items():
-
-        check_page(name, url)
-
-    print("\nTEST FINISHED")
+    monitor()
