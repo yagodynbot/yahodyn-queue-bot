@@ -46,22 +46,37 @@ def inspect_queue():
 
         response.raise_for_status()
 
-        result = response.json()
-        vehicles = result.get("data", [])
+        
+            result = response.json()
+            vehicles = result.get("data", [])
 
-        if not isinstance(vehicles, list):
-            raise ValueError("Unexpected API response format")
+            if not isinstance(vehicles, list):
+                raise ValueError("Unexpected API response format")
 
-        print(f"\nVehicles found: {len(vehicles)}\n")
+            vehicles.sort(
+                key=lambda v: int(v.get("position") or 999999)
+            )
 
-        for vehicle in vehicles:
-            print("-" * 40)
-            print("Truck:", vehicle.get("plate_number"))
-            print("Trailer:", vehicle.get("semi_trailer_number"))
-            print("Position:", vehicle.get("position"))
-            print("Queue number:", vehicle.get("position_number"))
-            print("Registered:", vehicle.get("confirmed_at"))
-            print("Estimated:", vehicle.get("estimated_time"))
+            print("\n" + "=" * 65)
+            print("       YAHODYN QUEUE MONITOR")
+            print("=" * 65)
+
+            print(f"Vehicles found: {len(vehicles)}")
+            print("Updated:", __import__("datetime").datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"))
+
+            print("-" * 65)
+
+            for vehicle in vehicles:
+                print(f"\nPosition: {vehicle.get('position', '-')}")
+                print(f"Truck:    {vehicle.get('plate_number', '-')}")
+                print(f"Trailer:  {vehicle.get('semi_trailer_number', '-')}")
+                print(f"Queue ID: {vehicle.get('position_number', '-')}")
+                print(f"Registered: {vehicle.get('confirmed_at', '-')}")
+                print(f"Estimated:  {vehicle.get('estimated_time', '-')}")
+
+            print("\n" + "=" * 65)
+            print("API CONNECTION SUCCESSFUL")
+            print("=" * 65)
 
         print("\nAPI CONNECTION SUCCESSFUL")
 
