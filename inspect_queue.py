@@ -26,6 +26,8 @@ def inspect_queue():
         )
 
         print("HTTP status:", response.status_code)
+        print("SERVER RESPONSE:", response.text[:3000])
+
         response.raise_for_status()
 
         result = response.json()
