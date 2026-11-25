@@ -1,11 +1,14 @@
-
 name: Test Yahodyn Bot
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
+
+  schedule:
+    - cron: "*/5 * * * *"
 
 jobs:
   test:
