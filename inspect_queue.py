@@ -1,71 +1,61 @@
 
 import requests
-from bs4 import BeautifulSoup
+import json
+import sys
 
-URL = (
-    "https://echerha.gov.ua/"
-    "workload/truck/checkpoints/1/1/30"
+API_URL = (
+    "https://back.echerha.gov.ua/api/v5/"
+    "workload/1/checkpoints/1/details/1/30?page=1"
 )
+
+HEADERS = {
+    "Accept": "application/json",
+    "Origin": "https://echerha.gov.ua",
+    "Referer": "https://echerha.gov.ua/",
+    "User-Agent": "Mozilla/5.0",
+}
 
 def inspect_queue():
     print("YAHODYN QUEUE BOT")
-    print("Перевірка офіційної єЧерги")
+    print("Connecting to eCherha API...")
 
-    headers = {
-        "User-Agent": "YahodynQueueBot/1.0"
-    }
+    try:
+        response = requests.get(
+            API_URL,
+            headers=HEADERS,
+            timeout=30
+        )
 
-    response = requests.get(
-        URL,
-        headers=headers,
-        timeout=30
-    )
+        print("HTTP status:", response.status_code)
+        response.raise_for_status()
 
-    print("HTTP status:", response.status_code)
-    response.raise_for_status()
+        result = response.json()
+        vehicles = result.get("data", [])
 
-    soup = BeautifulSoup(
-        response.text,
-        "html.parser"
-    )
+        if not isinstance(vehicles, list):
+            raise ValueError("Unexpected API response format")
 
-    print("Page title:", soup.title.get_text(strip=True)
-          if soup.title else "Не знайдено")
+        print(f"\nVehicles found: {len(vehicles)}\n")
 
-    tables = soup.find_all("table")
-    print("Знайдено таблиць:", len(tables))
+        for vehicle in vehicles:
+            print("-" * 40)
+            print("Truck:", vehicle.get("plate_number"))
+            print("Trailer:", vehicle.get("semi_trailer_number"))
+            print("Position:", vehicle.get("position"))
+            print("Queue number:", vehicle.get("position_number"))
+            print("Registered:", vehicle.get("confirmed_at"))
+            print("Estimated:", vehicle.get("estimated_time"))
 
-    found = False
+        print("\nAPI CONNECTION SUCCESSFUL")
 
-    for number, table in enumerate(tables, start=1):
-        rows = table.find_all("tr")
-        headers_text = [
-            cell.get_text(" ", strip=True).lower()
-            for cell in table.find_all("th")
-        ]
+    except requests.RequestException as error:
+        print("API REQUEST ERROR:", error)
+        sys.exit(1)
 
-        print(f"\nТаблиця №{number}")
-        print("Заголовки:", headers_text)
-        print("Кількість рядків:", max(0, len(rows) - 1))
+    except (ValueError, json.JSONDecodeError) as error:
+        print("DATA ERROR:", error)
+        sys.exit(1)
 
-        header_text = " ".join(headers_text)
-
-        if (
-            "номер транспорту" in header_text
-            and "реєстрація в черзі" in header_text
-        ):
-            found = True
-            print("Знайдено таблицю черги Ягодин!")
-
-    if not found:
-        print("\nУвага: таблицю черги не вдалося визначити.")
-        print("Можливо, дані завантажуються через JavaScript.")
-
-    print("\nПеревірку завершено.")
 
 if __name__ == "__main__":
-    try:
-        inspect_queue()
-    except Exception as error:
-        print("ПОМИЛКА:", type(error).__name__, str(error))
-        raise
+    inspect_queue()
