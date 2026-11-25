@@ -12,6 +12,8 @@ HEADERS = {
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
     "User-Agent": "Mozilla/5.0",
+    "X-Client-Locale": "uk-UA",
+    "Accept-Language": "uk-UA,uk;q=0.9",
 }
 
 def inspect_queue():
