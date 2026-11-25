@@ -1,16 +1,15 @@
 import requests
-import json
 import sys
+from datetime import datetime
+
 
 API_URL = (
     "https://back.echerha.gov.ua/api/v5/"
     "workload/1/checkpoints/1/details/1/30?page=1"
 )
 
-
 HEADERS = {
     "Accept": "application/json",
-    "Accept-Language": "uk-UA,uk;q=0.9",
     "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
@@ -19,19 +18,22 @@ HEADERS = {
         "AppleWebKit/605.1.15 (KHTML, like Gecko) "
         "Version/27.2 Safari/605.1.15"
     ),
-    "X-Client-Locale": "uk",
-    "X-Device-Id": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
-    "X-Device-Name": (
+    "x-client-locale": "uk",
+    "x-device-id": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
+    "x-device-name": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/605.1.15 (KHTML, like Gecko) "
         "Version/27.2 Safari/605.1.15"
     ),
-    "X-User-Agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
+    "x-user-agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
 }
 
 
 def inspect_queue():
-    print("YAHODYN QUEUE BOT")
+    print("=" * 65)
+    print("             YAHODYN QUEUE BOT")
+    print("=" * 65)
+
     print("Connecting to eCherha API...")
 
     try:
@@ -42,50 +44,70 @@ def inspect_queue():
         )
 
         print("HTTP status:", response.status_code)
-        print("SERVER RESPONSE:", response.text[:3000])
 
         response.raise_for_status()
 
-        
-            result = response.json()
-            vehicles = result.get("data", [])
+        result = response.json()
+        vehicles = result.get("data", [])
 
-            if not isinstance(vehicles, list):
-                raise ValueError("Unexpected API response format")
+        if not isinstance(vehicles, list):
+            raise ValueError("Unexpected API response format")
 
-            vehicles.sort(
-                key=lambda v: int(v.get("position") or 999999)
+        vehicles.sort(
+            key=lambda v: int(v.get("position") or 999999)
+        )
+
+        print("\n" + "=" * 65)
+        print("             YAHODYN QUEUE MONITOR")
+        print("=" * 65)
+
+        print("Vehicles found:", len(vehicles))
+
+        print(
+            "Updated:",
+            datetime.now().astimezone().strftime(
+                "%Y-%m-%d %H:%M:%S"
             )
+        )
 
-            print("\n" + "=" * 65)
-            print("       YAHODYN QUEUE MONITOR")
-            print("=" * 65)
+        print("-" * 65)
 
-            print(f"Vehicles found: {len(vehicles)}")
-            print("Updated:", __import__("datetime").datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S"))
+        for vehicle in vehicles:
+            print()
+            print("Position:", vehicle.get("position", "-"))
+            print("Truck:", vehicle.get("plate_number", "-"))
+            print(
+                "Trailer:",
+                vehicle.get("semi_trailer_number", "-")
+            )
+            print(
+                "Queue number:",
+                vehicle.get("position_number", "-")
+            )
+            print(
+                "Registered:",
+                vehicle.get("confirmed_at", "-")
+            )
+            print(
+                "Estimated:",
+                vehicle.get("estimated_time", "-")
+            )
 
             print("-" * 65)
 
-            for vehicle in vehicles:
-                print(f"\nPosition: {vehicle.get('position', '-')}")
-                print(f"Truck:    {vehicle.get('plate_number', '-')}")
-                print(f"Trailer:  {vehicle.get('semi_trailer_number', '-')}")
-                print(f"Queue ID: {vehicle.get('position_number', '-')}")
-                print(f"Registered: {vehicle.get('confirmed_at', '-')}")
-                print(f"Estimated:  {vehicle.get('estimated_time', '-')}")
-
-            print("\n" + "=" * 65)
-            print("API CONNECTION SUCCESSFUL")
-            print("=" * 65)
-
         print("\nAPI CONNECTION SUCCESSFUL")
+        print("Vehicles displayed:", len(vehicles))
 
-    except requests.RequestException as error:
-        print("API REQUEST ERROR:", error)
+    except requests.exceptions.RequestException as error:
+        print("\nAPI REQUEST ERROR:", error)
+
+        if getattr(error, "response", None) is not None:
+            print("SERVER RESPONSE:", error.response.text[:2000])
+
         sys.exit(1)
 
-    except (ValueError, json.JSONDecodeError) as error:
-        print("DATA ERROR:", error)
+    except (ValueError, TypeError) as error:
+        print("\nDATA ERROR:", error)
         sys.exit(1)
 
 
