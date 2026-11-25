@@ -7,14 +7,28 @@ API_URL = (
     "workload/1/checkpoints/1/details/1/30?page=1"
 )
 
+
 HEADERS = {
     "Accept": "application/json",
+    "Accept-Language": "uk-UA,uk;q=0.9",
+    "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
-    "User-Agent": "Mozilla/5.0",
-    "X-Client-Locale": "uk-UA",
-    "Accept-Language": "uk-UA,uk;q=0.9",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
+    ),
+    "X-Client-Locale": "uk",
+    "X-Device-Id": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
+    "X-Device-Name": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
+    ),
+    "X-User-Agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
 }
+
 
 def inspect_queue():
     print("YAHODYN QUEUE BOT")
