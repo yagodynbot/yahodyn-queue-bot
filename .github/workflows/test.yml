@@ -28,6 +28,8 @@ jobs:
 
           python-version: "3.12"
 
-      - name: Test eCherha connection
+      - name: Install dependencies
+  run: pip install -r requirements.txt
+  - name: Test eCherha connection
 
         run: python main.py
