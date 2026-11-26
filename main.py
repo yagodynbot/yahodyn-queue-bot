@@ -121,7 +121,8 @@ def send_telegram(message):
 
 def main():
     logging.info("YAHODIN MONITOR STARTED")
-
+    send_telegram("Тест Yahodin Bot: перевірка повідомлень успішна!")
+    
     current_count = get_queue_count()
     previous_count = load_state()
 
