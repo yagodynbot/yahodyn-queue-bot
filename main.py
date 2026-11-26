@@ -50,7 +50,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-
 def get_queue_count():
     response = requests.get(
         API_URL,
@@ -63,12 +62,13 @@ def get_queue_count():
     response.raise_for_status()
 
     result = response.json()
-    vehicles = result.get("data", [])
+    meta = result.get("meta", {})
+    total = meta.get("total")
 
-    if not isinstance(vehicles, list):
-        raise ValueError("Invalid API response")
+if not isinstance(total, int):
+    raise ValueError("Total queue count is missing or invalid")
 
-    return len(vehicles)
+return total
 
 
 def load_state():
