@@ -1,13 +1,12 @@
 import os
+import json
 import logging
 from datetime import datetime
 
 import requests
 
 # ==========================================
-# YAHODIN QUEUE BOT
-# Ягодин — Дорогуськ
-# Вантажівки понад 7,5 тонн
+# YAHODIN QUEUE MONITOR
 # ==========================================
 
 API_URL = (
@@ -18,31 +17,16 @@ API_URL = (
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+STATE_FILE = "queue_state.json"
+ALERT_INCREASE = 30
+
 HEADERS = {
     "Accept": "application/json",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "Accept-Language": "uk-UA,uk;q=0.9",
     "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
-    "Priority": "u=3, i",
-
-    "X-Client-Locale": "uk",
-    "X-Device-ID": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
-
-    "X-Device-Name": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Version/27.2 Safari/605.1.15"
-    ),
-
-    "X-User-Agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
-
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-        "Version/27.2 Safari/605.1.15"
-    )
+    "User-Agent": "Mozilla/5.0",
+    "X-Client-Locale": "uk"
 }
 
 logging.basicConfig(
@@ -50,139 +34,132 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-session = requests.Session()
-session.headers.update(HEADERS)
-
 
 def get_queue_data():
-    """Отримання черги з API єЧерги."""
-
-    response = session.get(
+    response = requests.get(
         API_URL,
+        headers=HEADERS,
         timeout=30
     )
 
     logging.info("HTTP status: %s", response.status_code)
-
-    if not response.ok:
-        logging.error(
-            "API ERROR RESPONSE: %s",
-            response.text[:3000]
-        )
-
     response.raise_for_status()
 
     result = response.json()
-
     vehicles = result.get("data", [])
 
     if not isinstance(vehicles, list):
-        raise ValueError("Invalid API response: data is not a list")
+        raise ValueError("Invalid API response")
 
     return vehicles
 
 
-def format_queue(vehicles):
-    """Формування списку автомобілів."""
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return None
 
-    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    with open(STATE_FILE, "r", encoding="utf-8") as file:
+        state = json.load(file)
 
-    lines = [
-        "🚛 ЯГОДИН — ДОРОГУСЬК",
-        "Черга вантажівок понад 7,5 тонн",
-        "",
-        f"🚚 Автомобілів у черзі: {len(vehicles)}",
-        f"🕒 Оновлено: {now}",
-        ""
-    ]
+    return state.get("queue_count")
 
-    for vehicle in vehicles:
 
-        lines.extend([
-            "━━━━━━━━━━━━━━━━━━",
-            f"📍 Позиція: {vehicle.get('position', '-')}",
-            f"🚛 Авто: {vehicle.get('plate_number', '-')}",
-            f"🚚 Причіп: {vehicle.get('semi_trailer_number', '-')}",
-            f"🎫 Номер черги: {vehicle.get('position_number', '-')}",
-            f"📝 Реєстрація: {vehicle.get('confirmed_at', '-')}",
-            f"⏳ Орієнтовний час: {vehicle.get('estimated_time', '-')}",
-            ""
-        ])
+def save_state(count):
+    temporary_file = STATE_FILE + ".tmp"
 
-    return "\n".join(lines)
+    with open(temporary_file, "w", encoding="utf-8") as file:
+        json.dump(
+            {"queue_count": count},
+            file
+        )
+
+    os.replace(temporary_file, STATE_FILE)
 
 
 def send_telegram(message):
-    """Надсилання повідомлення в Telegram."""
-
-    if not BOT_TOKEN:
-        raise ValueError("TELEGRAM_BOT_TOKEN is missing")
-
-    if not CHAT_ID:
-        raise ValueError("TELEGRAM_CHAT_ID is missing")
+    if not BOT_TOKEN or not CHAT_ID:
+        raise ValueError("Telegram credentials missing")
 
     url = (
         f"https://api.telegram.org/"
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    chunks = []
-    current = ""
+    response = requests.post(
+        url,
+        json={
+            "chat_id": CHAT_ID,
+            "text": message
+        },
+        timeout=30
+    )
 
-    for line in message.split("\n"):
+    response.raise_for_status()
 
-        if len(current) + len(line) + 1 > 3900:
+    result = response.json()
 
-            if current:
-                chunks.append(current)
-
-            current = line
-
-        else:
-            current += ("\n" if current else "") + line
-
-    if current:
-        chunks.append(current)
-
-    for chunk in chunks:
-
-        response = requests.post(
-            url,
-            json={
-                "chat_id": CHAT_ID,
-                "text": chunk
-            },
-            timeout=30
-        )
-
-        response.raise_for_status()
-
-        result = response.json()
-
-        if not result.get("ok"):
-            raise RuntimeError(
-                f"Telegram error: {result}"
-            )
-
-    logging.info("Telegram message sent successfully")
+    if not result.get("ok"):
+        raise RuntimeError("Telegram rejected message")
 
 
 def main():
-
-    logging.info("YAHODIN BOT STARTED")
+    logging.info("YAHODIN MONITOR STARTED")
 
     vehicles = get_queue_data()
+    current_count = len(vehicles)
 
-    logging.info(
-        "Vehicles found: %s",
-        len(vehicles)
-    )
+    logging.info("Vehicles found: %s", current_count)
 
-    message = format_queue(vehicles)
+    previous_count = load_state()
 
-    send_telegram(message)
+    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
-    logging.info("YAHODIN BOT SUCCESSFUL")
+    if previous_count is None:
+
+        message = (
+            "🚛 YAHODIN BOT\n\n"
+            "Моніторинг черги запущено!\n"
+            f"Автомобілів: {current_count}\n"
+            f"Оновлено: {now}"
+        )
+
+        send_telegram(message)
+        save_state(current_count)
+
+        logging.info("Initial queue saved")
+
+    else:
+
+        difference = current_count - previous_count
+
+        logging.info(
+            "Previous: %s | Current: %s | Change: %+d",
+            previous_count,
+            current_count,
+            difference
+        )
+
+        if difference >= ALERT_INCREASE:
+
+            message = (
+                "🚨 YAHODIN BOT — УВАГА!\n\n"
+                "Збільшення черги Ягодин — Дорогуськ!\n\n"
+                f"Було: {previous_count} машин\n"
+                f"Стало: {current_count} машин\n"
+                f"Збільшення: +{difference} машин\n\n"
+                f"Час: {now}"
+            )
+
+            send_telegram(message)
+
+            logging.info("Increase alert sent")
+
+        else:
+            logging.info("No significant queue increase")
+
+        save_state(current_count)
+
+    logging.info("YAHODIN MONITOR SUCCESSFUL")
 
 
 if __name__ == "__main__":
