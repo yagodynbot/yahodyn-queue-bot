@@ -21,29 +21,24 @@ STATE_FILE = "queue_state.json"
 ALERT_INCREASE = 30
 
 HEADERS = {
-    "Accept": "application/json, text/plain, */*",
+    "Accept": "application/json",
     "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
     "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
     ),
-    "X-User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36"
+    "x-client-locale": "uk",
+    "x-device-id": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
+    "x-device-name": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
     ),
-    "X-Client-Locale": "uk"
+    "x-user-agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
 }
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s"
-)
-
-
 
 def get_queue_data():
     """Отримання черги з API єЧерги."""
