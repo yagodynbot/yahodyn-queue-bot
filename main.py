@@ -35,7 +35,10 @@ logging.basicConfig(
 )
 
 
+
 def get_queue_data():
+    """Отримання черги з API єЧерги."""
+
     response = requests.get(
         API_URL,
         headers=HEADERS,
@@ -43,13 +46,23 @@ def get_queue_data():
     )
 
     logging.info("HTTP status: %s", response.status_code)
+
+    if response.status_code != 200:
+        logging.error(
+            "API response body: %s",
+            response.text[:3000]
+        )
+
     response.raise_for_status()
 
     result = response.json()
+
     vehicles = result.get("data", [])
 
     if not isinstance(vehicles, list):
         raise ValueError("Invalid API response")
+
+    logging.info("Vehicles received: %s", len(vehicles))
 
     return vehicles
 
