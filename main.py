@@ -58,18 +58,16 @@ def get_queue_count():
     )
 
     logging.info("HTTP status: %s", response.status_code)
-
     response.raise_for_status()
 
     result = response.json()
     meta = result.get("meta", {})
     total = meta.get("total")
 
-if not isinstance(total, int):
-    raise ValueError("Total queue count is missing or invalid")
+    if not isinstance(total, int):
+        raise ValueError("Total queue count is missing or invalid")
 
-return total
-
+    return total
 
 def load_state():
     if not os.path.exists(STATE_FILE):
