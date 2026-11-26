@@ -17,7 +17,10 @@ API_URL = (
 )
 
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+CHAT_IDS = [
+    os.getenv("TELEGRAM_CHAT_ID"),
+    "390756867",
+]
 
 STATE_FILE = "queue_state.json"
 ALERT_INCREASE = 30
@@ -87,32 +90,34 @@ def save_state(count):
 
 
 def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        raise ValueError("Telegram secrets are missing")
+    if not BOT_TOKEN:
+        raise ValueError("Telegram bot token is missing")
 
-    url = (
-        f"https://api.telegram.org/"
-        f"bot{BOT_TOKEN}/sendMessage"
-    )
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    response = requests.post(
-        url,
-        json={
-            "chat_id": CHAT_ID,
-            "text": message
-        },
-        timeout=30
-    )
+    for chat_id in CHAT_IDS:
+        if not chat_id:
+            continue
 
-    response.raise_for_status()
+        response = requests.post(
+            url,
+            json={
+                "chat_id": chat_id,
+                "text": message
+            },
+            timeout=30
+        )
 
-    result = response.json()
+        response.raise_for_status()
 
-    if not result.get("ok"):
-        raise RuntimeError("Telegram rejected message")
+        result = response.json()
 
-    logging.info("Telegram notification sent")
+        if not result.get("ok"):
+            raise RuntimeError(
+                f"Telegram rejected message for chat_id {chat_id}"
+            )
 
+        logging.info(f"Telegram notification sent to {chat_id}")
 
 def main():
     logging.info("YAHODIN MONITOR STARTED")
