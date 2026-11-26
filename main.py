@@ -21,11 +21,20 @@ STATE_FILE = "queue_state.json"
 ALERT_INCREASE = 30
 
 HEADERS = {
-    "Accept": "application/json",
+    "Accept": "application/json, text/plain, */*",
     "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
-    "User-Agent": "Mozilla/5.0",
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "X-User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
     "X-Client-Locale": "uk"
 }
 
