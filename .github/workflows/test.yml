@@ -26,7 +26,14 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
-
+        
+      - name: Restore queue state
+        uses: actions/cache@v4
+        with:
+          path: queue_state.json
+          key: yahodyn-queue-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            yahodyn-queue-
       - name: Send Yahodyn queue to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
