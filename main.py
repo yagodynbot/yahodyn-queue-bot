@@ -1,120 +1,163 @@
-
 import os
-import json
-import time
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 import requests
 
-# Yahodin Bot
-# Основна черга завантажених вантажівок понад 7,5 т
+# ==========================================
+# YAHODIN QUEUE BOT
+# Ягодин — Дорогуськ
+# Вантажівки понад 7,5 тонн
+# ==========================================
 
-QUEUE_URL = (
-    "https://echerha.gov.ua/"
-    "workload/truck/checkpoints/1/1/30"
+API_URL = (
+    "https://back.echerha.gov.ua/api/v5/"
+    "workload/1/checkpoints/1/details/1/30?page=1"
 )
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-CHECK_INTERVAL = 600
-ALERT_INCREASE = 30
+HEADERS = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    "Origin": "https://echerha.gov.ua",
+    "Referer": "https://echerha.gov.ua/",
+    "User-Agent": "Mozilla/5.0",
+    "X-Client-Locale": "uk"
+}
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
-session = requests.Session()
-session.headers.update({
-    "User-Agent": "YahodinQueueBot/1.0"
-})
-
 
 def get_queue_data():
-    response = session.get(QUEUE_URL, timeout=30)
+    """Отримання черги з API єЧерги."""
+
+    response = requests.get(
+        API_URL,
+        headers=HEADERS,
+        timeout=30
+    )
+
+    logging.info("HTTP status: %s", response.status_code)
+
     response.raise_for_status()
 
-    return response.text
+    result = response.json()
+    vehicles = result.get("data", [])
+
+    if not isinstance(vehicles, list):
+        raise ValueError("Invalid API response")
+
+    return vehicles
 
 
-def get_queue_count():
-    """
-    Тут буде підключено перевірений
-    формат даних API єЧерги.
+def format_queue(vehicles):
+    """Формування списку автомобілів."""
 
-    Не використовуємо кількість HTML-рядків
-    як кількість вантажівок.
-    """
-    raise NotImplementedError(
-        "Потрібно підтвердити API та поле "
-        "з кількістю автомобілів."
-    )
+    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+
+    lines = [
+        "🚛 ЯГОДИН — ДОРОГУСЬК",
+        "Черга вантажівок понад 7,5 тонн",
+        "",
+        f"🚚 Автомобілів у черзі: {len(vehicles)}",
+        f"🕒 Оновлено: {now}",
+        ""
+    ]
+
+    for vehicle in vehicles:
+
+        lines.extend([
+            "━━━━━━━━━━━━━━━━━━",
+            f"📍 Позиція: {vehicle.get('position', '-')}",
+            f"🚛 Авто: {vehicle.get('plate_number', '-')}",
+            f"🚚 Причіп: {vehicle.get('semi_trailer_number', '-')}",
+            f"🎫 Номер черги: {vehicle.get('position_number', '-')}",
+            f"📝 Реєстрація: {vehicle.get('confirmed_at', '-')}",
+            f"⏳ Орієнтовний час: {vehicle.get('estimated_time', '-')}",
+            ""
+        ])
+
+    return "\n".join(lines)
 
 
 def send_telegram(message):
-    if not BOT_TOKEN or not CHAT_ID:
-        logging.error("BOT_TOKEN або CHAT_ID не задані")
-        return
+    """Надсилання повідомлення в Telegram."""
+
+    if not BOT_TOKEN:
+        raise ValueError("TELEGRAM_BOT_TOKEN is missing")
+
+    if not CHAT_ID:
+        raise ValueError("TELEGRAM_CHAT_ID is missing")
 
     url = (
         f"https://api.telegram.org/"
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    response = requests.post(
-        url,
-        json={
-            "chat_id": CHAT_ID,
-            "text": message
-        },
-        timeout=30
+    # Розділяємо повідомлення на частини,
+    # щоб не перевищувати ліміт Telegram.
+
+    chunks = []
+    current = ""
+
+    for line in message.split("\n"):
+
+        if len(current) + len(line) + 1 > 3900:
+            if current:
+                chunks.append(current)
+
+            current = line
+        else:
+            current += ("\n" if current else "") + line
+
+    if current:
+        chunks.append(current)
+
+    for chunk in chunks:
+
+        response = requests.post(
+            url,
+            json={
+                "chat_id": CHAT_ID,
+                "text": chunk
+            },
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        result = response.json()
+
+        if not result.get("ok"):
+            raise RuntimeError(
+                "Telegram rejected the message"
+            )
+
+    logging.info("Telegram message sent successfully")
+
+
+def main():
+
+    logging.info("YAHODIN BOT STARTED")
+
+    vehicles = get_queue_data()
+
+    logging.info(
+        "Vehicles found: %s",
+        len(vehicles)
     )
-    response.raise_for_status()
 
+    message = format_queue(vehicles)
 
-def monitor():
-    previous_count = None
+    send_telegram(message)
 
-    logging.info("Yahodin Bot started")
-
-    while True:
-        try:
-            current_count = get_queue_count()
-
-            if previous_count is None:
-                previous_count = current_count
-                logging.info(
-                    "Initial queue: %s", current_count
-                )
-
-            else:
-                difference = current_count - previous_count
-
-                logging.info(
-                    "Previous: %s | Current: %s | Change: %+d",
-                    previous_count,
-                    current_count,
-                    difference
-                )
-
-                if difference >= ALERT_INCREASE:
-                    send_telegram(
-                        "🚛 YAHODIN BOT\n\n"
-                        "Збільшення черги Ягодин — Дорогуск!\n"
-                        f"Було: {previous_count} машин\n"
-                        f"Стало: {current_count} машин\n"
-                        f"Збільшення: +{difference}"
-                    )
-
-                previous_count = current_count
-
-        except Exception:
-            logging.exception("Monitoring error")
-
-        time.sleep(CHECK_INTERVAL)
+    logging.info("YAHODIN BOT SUCCESSFUL")
 
 
 if __name__ == "__main__":
-    monitor()
+    main()
