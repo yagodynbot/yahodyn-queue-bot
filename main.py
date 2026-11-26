@@ -20,11 +20,29 @@ CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 HEADERS = {
     "Accept": "application/json",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "uk-UA,uk;q=0.9",
     "Content-Type": "application/json",
     "Origin": "https://echerha.gov.ua",
     "Referer": "https://echerha.gov.ua/",
-    "User-Agent": "Mozilla/5.0",
-    "X-Client-Locale": "uk"
+    "Priority": "u=3, i",
+
+    "X-Client-Locale": "uk",
+    "X-Device-ID": "8cb50a23-b3f2-400a-8cbb-4fa7dd57d7a7",
+
+    "X-Device-Name": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
+    ),
+
+    "X-User-Agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
+
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/27.2 Safari/605.1.15"
+    )
 }
 
 logging.basicConfig(
@@ -32,25 +50,34 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s"
 )
 
+session = requests.Session()
+session.headers.update(HEADERS)
+
 
 def get_queue_data():
     """Отримання черги з API єЧерги."""
 
-    response = requests.get(
+    response = session.get(
         API_URL,
-        headers=HEADERS,
         timeout=30
     )
 
     logging.info("HTTP status: %s", response.status_code)
 
+    if not response.ok:
+        logging.error(
+            "API ERROR RESPONSE: %s",
+            response.text[:3000]
+        )
+
     response.raise_for_status()
 
     result = response.json()
+
     vehicles = result.get("data", [])
 
     if not isinstance(vehicles, list):
-        raise ValueError("Invalid API response")
+        raise ValueError("Invalid API response: data is not a list")
 
     return vehicles
 
@@ -99,19 +126,18 @@ def send_telegram(message):
         f"bot{BOT_TOKEN}/sendMessage"
     )
 
-    # Розділяємо повідомлення на частини,
-    # щоб не перевищувати ліміт Telegram.
-
     chunks = []
     current = ""
 
     for line in message.split("\n"):
 
         if len(current) + len(line) + 1 > 3900:
+
             if current:
                 chunks.append(current)
 
             current = line
+
         else:
             current += ("\n" if current else "") + line
 
@@ -135,7 +161,7 @@ def send_telegram(message):
 
         if not result.get("ok"):
             raise RuntimeError(
-                "Telegram rejected the message"
+                f"Telegram error: {result}"
             )
 
     logging.info("Telegram message sent successfully")
