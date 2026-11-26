@@ -6,7 +6,9 @@ from datetime import datetime
 import requests
 
 # ==========================================
-# YAHODIN QUEUE MONITOR
+# YAHODIN QUEUE BOT
+# Ягодин — Дорогуськ
+# Тільки кількість вантажівок понад 7,5 т
 # ==========================================
 
 API_URL = (
@@ -40,9 +42,13 @@ HEADERS = {
     "x-user-agent": "UABorder/3.14.0 Web/1.1.0 User/guest",
 }
 
-def get_queue_data():
-    """Отримання черги з API єЧерги."""
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
+
+def get_queue_count():
     response = requests.get(
         API_URL,
         headers=HEADERS,
@@ -51,24 +57,15 @@ def get_queue_data():
 
     logging.info("HTTP status: %s", response.status_code)
 
-    if response.status_code != 200:
-        logging.error(
-            "API response body: %s",
-            response.text[:3000]
-        )
-
     response.raise_for_status()
 
     result = response.json()
-
     vehicles = result.get("data", [])
 
     if not isinstance(vehicles, list):
         raise ValueError("Invalid API response")
 
-    logging.info("Vehicles received: %s", len(vehicles))
-
-    return vehicles
+    return len(vehicles)
 
 
 def load_state():
@@ -78,24 +75,20 @@ def load_state():
     with open(STATE_FILE, "r", encoding="utf-8") as file:
         state = json.load(file)
 
-    return state.get("queue_count")
+    return state.get("previous_count")
 
 
 def save_state(count):
-    temporary_file = STATE_FILE + ".tmp"
-
-    with open(temporary_file, "w", encoding="utf-8") as file:
+    with open(STATE_FILE, "w", encoding="utf-8") as file:
         json.dump(
-            {"queue_count": count},
+            {"previous_count": count},
             file
         )
-
-    os.replace(temporary_file, STATE_FILE)
 
 
 def send_telegram(message):
     if not BOT_TOKEN or not CHAT_ID:
-        raise ValueError("Telegram credentials missing")
+        raise ValueError("Telegram secrets are missing")
 
     url = (
         f"https://api.telegram.org/"
@@ -118,63 +111,69 @@ def send_telegram(message):
     if not result.get("ok"):
         raise RuntimeError("Telegram rejected message")
 
+    logging.info("Telegram notification sent")
+
 
 def main():
     logging.info("YAHODIN MONITOR STARTED")
 
-    vehicles = get_queue_data()
-    current_count = len(vehicles)
-
-    logging.info("Vehicles found: %s", current_count)
-
+    current_count = get_queue_count()
     previous_count = load_state()
 
-    now = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    now = datetime.now().astimezone().strftime(
+        "%d.%m.%Y %H:%M:%S"
+    )
+
+    logging.info(
+        "Previous: %s | Current: %s",
+        previous_count,
+        current_count
+    )
 
     if previous_count is None:
-
         message = (
             "🚛 YAHODIN BOT\n\n"
-            "Моніторинг черги запущено!\n"
-            f"Автомобілів: {current_count}\n"
-            f"Оновлено: {now}"
+            "Ягодин — Дорогуськ\n"
+            "Початкова перевірка черги\n\n"
+            f"🚚 У черзі: {current_count} машин\n"
+            f"🕒 Оновлено: {now}"
         )
 
         send_telegram(message)
-        save_state(current_count)
-
-        logging.info("Initial queue saved")
 
     else:
-
         difference = current_count - previous_count
 
-        logging.info(
-            "Previous: %s | Current: %s | Change: %+d",
-            previous_count,
-            current_count,
-            difference
-        )
-
         if difference >= ALERT_INCREASE:
-
             message = (
-                "🚨 YAHODIN BOT — УВАГА!\n\n"
-                "Збільшення черги Ягодин — Дорогуськ!\n\n"
+                "🚛 YAHODIN BOT\n\n"
+                "📈 ЗБІЛЬШЕННЯ ЧЕРГИ!\n"
+                "Ягодин — Дорогуськ\n\n"
                 f"Було: {previous_count} машин\n"
                 f"Стало: {current_count} машин\n"
                 f"Збільшення: +{difference} машин\n\n"
-                f"Час: {now}"
+                f"🕒 {now}"
             )
 
             send_telegram(message)
 
-            logging.info("Increase alert sent")
+        elif difference < 0:
+            message = (
+                "🚛 YAHODIN BOT\n\n"
+                "📉 ЗМЕНШЕННЯ ЧЕРГИ!\n"
+                "Ягодин — Дорогуськ\n\n"
+                f"Було: {previous_count} машин\n"
+                f"Стало: {current_count} машин\n"
+                f"Зменшення: {abs(difference)} машин\n\n"
+                f"🕒 {now}"
+            )
+
+            send_telegram(message)
 
         else:
-            logging.info("No significant queue increase")
+            logging.info("No significant queue change")
 
-        save_state(current_count)
+    save_state(current_count)
 
     logging.info("YAHODIN MONITOR SUCCESSFUL")
 
